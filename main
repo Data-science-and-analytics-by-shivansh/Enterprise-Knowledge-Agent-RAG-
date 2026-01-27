@@ -1,50 +1,388 @@
 import os
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext, load_index_from_storage
+import logging
+import time
+from datetime import datetime
+from typing import List, Dict
+import mlflow
+import chromadb
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext
+from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.extractors import TitleExtractor, SummaryExtractor
 from llama_index.core.ingestion import IngestionPipeline
+from llama_index.core.retrievers import BM25Retriever
+from llama_index.core.evaluation import RetrieverEvaluator
+from ragas import evaluate
+from ragas.metrics import faithfulness, answer_relevancy, context_precision
+from datasets import Dataset
+import yaml
 
-# 1. DATA INGESTION & ROBUST PREPROCESSING
-def build_v4c_knowledge_base(data_path="./v4c_docs"):
-    # Load all PDFs/Docs from the folder
-    documents = SimpleDirectoryReader(data_path).load_data()
+# =====================================================
+# CONFIGURATION
+# =====================================================
+class Config:
+    def __init__(self, config_path="config.yaml"):
+        with open(config_path, 'r') as f:
+            self.cfg = yaml.safe_load(f)
     
-    # Transformation Pipeline: This is the 'Enterprise' part
-    pipeline = IngestionPipeline(
-        transformations=[
-            SentenceSplitter(chunk_size=512, chunk_overlap=50), # Smaller chunks = higher precision
-            TitleExtractor(nodes=5), # Automatically tags the document title
-            SummaryExtractor(summaries=["self"]) # Summarizes the context of each chunk
+    def get(self, key, default=None):
+        return self.cfg.get(key, default)
+
+# =====================================================
+# LOGGING (HIPAA-Compliant)
+# =====================================================
+def setup_logging(log_level="INFO"):
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(f"logs/v4c_rag_{datetime.now().strftime('%Y%m%d')}.log"),
+            logging.StreamHandler()
         ]
     )
-    
-    # Create nodes with metadata
-    nodes = pipeline.run(documents=documents)
-    
-    # 2. PERSISTENT INDEXING (Avoid re-paying for embeddings)
-    if not os.path.exists("./storage"):
-        print("Creating new index...")
-        index = VectorStoreIndex(nodes)
-        index.storage_context.persist(persist_dir="./storage")
-    else:
-        print("Loading existing index...")
-        storage_context = StorageContext.from_defaults(persist_dir="./storage")
-        index = load_index_from_storage(storage_context)
-    
-    return index
+    return logging.getLogger(__name__)
 
-# 3. ADVANCED RETRIEVAL (The Query Engine)
-def query_v4c_expert(index, user_query):
-    # 'Similarity_top_k=3' ensures the AI sees the 3 most relevant case studies
-    query_engine = index.as_query_engine(similarity_top_k=3)
-    response = query_engine.query(user_query)
-    
-    # In production, we always print the source to avoid hallucinations
-    print(f"\n--- AI ANSWER ---\n{response}")
-    print("\n--- SOURCES USED ---")
-    for node in response.source_nodes:
-        print(f"File: {node.metadata.get('file_name')} | Score: {node.score:.4f}")
+logger = setup_logging()
 
-# EXECUTION
-# index = build_v4c_knowledge_base()
-# query_v4c_expert(index, "Explain v4c's impact on clinical trial recruitment.")
+# =====================================================
+# HYBRID RETRIEVER (BM25 + Vector Search)
+# =====================================================
+class HybridRetriever:
+    """Combines BM25 keyword matching with vector similarity"""
+    
+    def __init__(self, index, nodes, top_k=3, alpha=0.5):
+        self.vector_retriever = index.as_retriever(similarity_top_k=top_k)
+        self.bm25_retriever = BM25Retriever.from_defaults(
+            nodes=nodes,
+            similarity_top_k=top_k
+        )
+        self.alpha = alpha  # Weight for vector search (1-alpha for BM25)
+        self.top_k = top_k
+        
+    def retrieve(self, query_str):
+        """Retrieve and merge results from both retrievers"""
+        vector_results = self.vector_retriever.retrieve(query_str)
+        bm25_results = self.bm25_retriever.retrieve(query_str)
+        
+        # Combine scores
+        all_nodes = {}
+        
+        for node in vector_results:
+            all_nodes[node.node.id_] = {
+                'node': node.node,
+                'vector_score': node.score,
+                'bm25_score': 0.0
+            }
+        
+        for node in bm25_results:
+            if node.node.id_ in all_nodes:
+                all_nodes[node.node.id_]['bm25_score'] = node.score
+            else:
+                all_nodes[node.node.id_] = {
+                    'node': node.node,
+                    'vector_score': 0.0,
+                    'bm25_score': node.score
+                }
+        
+        # Calculate hybrid scores
+        for data in all_nodes.values():
+            data['hybrid_score'] = (
+                self.alpha * data['vector_score'] + 
+                (1 - self.alpha) * data['bm25_score']
+            )
+        
+        # Sort and return top-k
+        sorted_nodes = sorted(
+            all_nodes.values(),
+            key=lambda x: x['hybrid_score'],
+            reverse=True
+        )[:self.top_k]
+        
+        return sorted_nodes
+
+# =====================================================
+# KNOWLEDGE BASE (With ChromaDB)
+# =====================================================
+class V4CKnowledgeBase:
+    def __init__(self, config: Config):
+        self.config = config
+        self.index = None
+        self.nodes = None
+        
+    def build_index(self):
+        try:
+            mlflow.set_experiment("v4c_rag_indexing")
+            with mlflow.start_run():
+                data_path = self.config.get("data_path", "./v4c_docs")
+                
+                mlflow.log_param("data_path", data_path)
+                mlflow.log_param("chunk_size", self.config.get("chunk_size", 512))
+                mlflow.log_param("vector_store", "ChromaDB")
+                
+                logger.info(f"Loading documents from {data_path}")
+                documents = SimpleDirectoryReader(data_path).load_data()
+                mlflow.log_metric("num_documents", len(documents))
+                
+                # Preprocessing pipeline
+                pipeline = IngestionPipeline(
+                    transformations=[
+                        SentenceSplitter(
+                            chunk_size=self.config.get("chunk_size", 512),
+                            chunk_overlap=self.config.get("chunk_overlap", 50)
+                        ),
+                        TitleExtractor(nodes=5),
+                        SummaryExtractor(summaries=["self"])
+                    ]
+                )
+                
+                self.nodes = pipeline.run(documents=documents)
+                mlflow.log_metric("num_nodes", len(self.nodes))
+                
+                # Initialize ChromaDB
+                chroma_client = chromadb.PersistentClient(
+                    path=self.config.get("chroma_path", "./chroma_db")
+                )
+                chroma_collection = chroma_client.get_or_create_collection(
+                    "v4c_clinical_trials"
+                )
+                vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+                storage_context = StorageContext.from_defaults(vector_store=vector_store)
+                
+                logger.info("Creating index with ChromaDB...")
+                self.index = VectorStoreIndex(
+                    self.nodes,
+                    storage_context=storage_context
+                )
+                
+                logger.info("Index built successfully")
+                return self.index
+                
+        except Exception as e:
+            logger.error(f"Index building failed: {str(e)}")
+            raise
+
+# =====================================================
+# QUERY ENGINE (With Latency Tracking)
+# =====================================================
+class V4CQueryEngine:
+    def __init__(self, index, nodes, config: Config, use_hybrid=True):
+        self.config = config
+        self.use_hybrid = use_hybrid
+        
+        if use_hybrid:
+            self.retriever = HybridRetriever(
+                index,
+                nodes,
+                top_k=config.get("top_k", 3),
+                alpha=config.get("hybrid_alpha", 0.5)
+            )
+        else:
+            self.retriever = index.as_retriever(
+                similarity_top_k=config.get("top_k", 3)
+            )
+        
+        self.query_engine = index.as_query_engine()
+        
+    def query(self, user_query: str, track_metrics: bool = True):
+        try:
+            start_time = time.time()
+            
+            with mlflow.start_run(nested=True):
+                mlflow.log_param("query", user_query)
+                mlflow.log_param("use_hybrid", self.use_hybrid)
+                
+                # Retrieve relevant nodes
+                if self.use_hybrid:
+                    retrieved_nodes = self.retriever.retrieve(user_query)
+                    # Extract actual nodes for query engine
+                    nodes_for_query = [item['node'] for item in retrieved_nodes]
+                else:
+                    nodes_for_query = self.retriever.retrieve(user_query)
+                
+                # Generate response
+                response = self.query_engine.query(user_query)
+                
+                # Calculate latency
+                latency_ms = (time.time() - start_time) * 1000
+                mlflow.log_metric("query_latency_ms", latency_ms)
+                
+                # Calculate confidence
+                if track_metrics and hasattr(response, 'source_nodes'):
+                    avg_score = sum(
+                        node.score for node in response.source_nodes
+                    ) / len(response.source_nodes)
+                    mlflow.log_metric("avg_retrieval_score", avg_score)
+                else:
+                    avg_score = None
+                
+                # Source attribution
+                sources = []
+                if hasattr(response, 'source_nodes'):
+                    sources = [
+                        {
+                            "file": node.metadata.get('file_name', 'unknown'),
+                            "score": node.score,
+                            "text_preview": node.text[:100]
+                        }
+                        for node in response.source_nodes
+                    ]
+                
+                return {
+                    "answer": str(response),
+                    "sources": sources,
+                    "confidence": avg_score,
+                    "latency_ms": latency_ms,
+                    "latency_seconds": latency_ms / 1000
+                }
+                
+        except Exception as e:
+            logger.error(f"Query failed: {str(e)}")
+            return {"error": str(e)}
+
+# =====================================================
+# EVALUATION (With Ragas)
+# =====================================================
+class V4CEvaluator:
+    def __init__(self, query_engine):
+        self.query_engine = query_engine
+    
+    def evaluate_retrieval(self, test_queries: List[Dict]):
+        """
+        Test queries format:
+        [{"query": "...", "expected_docs": ["doc1.pdf"]}, ...]
+        """
+        results = []
+        
+        for test in test_queries:
+            response = self.query_engine.query(test["query"])
+            
+            # Check if expected doc is in results
+            retrieved_files = [src["file"] for src in response["sources"]]
+            hit = any(
+                exp_doc in retrieved_files 
+                for exp_doc in test["expected_docs"]
+            )
+            
+            # Calculate reciprocal rank
+            if hit:
+                position = next(
+                    i for i, f in enumerate(retrieved_files)
+                    if f in test["expected_docs"]
+                )
+                reciprocal_rank = 1 / (position + 1)
+            else:
+                reciprocal_rank = 0
+            
+            results.append(reciprocal_rank)
+        
+        mrr = sum(results) / len(results)
+        mlflow.log_metric("mrr", mrr)
+        logger.info(f"Mean Reciprocal Rank: {mrr:.4f}")
+        
+        return mrr
+    
+    def evaluate_with_ragas(self, test_samples: List[Dict]):
+        """
+        Test samples format:
+        [{
+            'question': '...',
+            'answer': '...',
+            'contexts': ['...'],
+            'ground_truth': '...'
+        }]
+        """
+        try:
+            dataset = Dataset.from_list(test_samples)
+            
+            result = evaluate(
+                dataset,
+                metrics=[faithfulness, answer_relevancy, context_precision]
+            )
+            
+            # Log to MLflow
+            mlflow.log_metric("ragas_faithfulness", result['faithfulness'])
+            mlflow.log_metric("ragas_answer_relevancy", result['answer_relevancy'])
+            mlflow.log_metric("ragas_context_precision", result['context_precision'])
+            
+            logger.info(f"Ragas Evaluation Results:")
+            logger.info(f"  Faithfulness: {result['faithfulness']:.4f}")
+            logger.info(f"  Answer Relevancy: {result['answer_relevancy']:.4f}")
+            logger.info(f"  Context Precision: {result['context_precision']:.4f}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Ragas evaluation failed: {str(e)}")
+            return None
+
+# =====================================================
+# BENCHMARKING (Vector vs Hybrid)
+# =====================================================
+def benchmark_retrieval_methods(kb, config, test_queries):
+    """Compare vector-only vs hybrid search"""
+    
+    logger.info("Benchmarking: Vector-only search...")
+    vector_engine = V4CQueryEngine(kb.index, kb.nodes, config, use_hybrid=False)
+    evaluator_vector = V4CEvaluator(vector_engine)
+    vector_mrr = evaluator_vector.evaluate_retrieval(test_queries)
+    
+    logger.info("Benchmarking: Hybrid search...")
+    hybrid_engine = V4CQueryEngine(kb.index, kb.nodes, config, use_hybrid=True)
+    evaluator_hybrid = V4CEvaluator(hybrid_engine)
+    hybrid_mrr = evaluator_hybrid.evaluate_retrieval(test_queries)
+    
+    improvement = ((hybrid_mrr - vector_mrr) / vector_mrr) * 100
+    
+    mlflow.log_metric("vector_only_mrr", vector_mrr)
+    mlflow.log_metric("hybrid_mrr", hybrid_mrr)
+    mlflow.log_metric("improvement_percent", improvement)
+    
+    logger.info(f"\n--- BENCHMARK RESULTS ---")
+    logger.info(f"Vector-only MRR: {vector_mrr:.4f}")
+    logger.info(f"Hybrid MRR: {hybrid_mrr:.4f}")
+    logger.info(f"Improvement: {improvement:.2f}%")
+    
+    return {
+        "vector_mrr": vector_mrr,
+        "hybrid_mrr": hybrid_mrr,
+        "improvement_percent": improvement
+    }
+
+# =====================================================
+# MAIN EXECUTION
+# =====================================================
+if __name__ == "__main__":
+    # Load configuration
+    config = Config()
+    
+    # Build knowledge base
+    logger.info("Building knowledge base...")
+    kb = V4CKnowledgeBase(config)
+    index = kb.build_index()
+    
+    # Initialize query engine (hybrid by default)
+    logger.info("Initializing query engine...")
+    engine = V4CQueryEngine(index, kb.nodes, config, use_hybrid=True)
+    
+    # Example query
+    logger.info("\n--- TESTING QUERY ---")
+    result = engine.query("Explain v4c's impact on clinical trial recruitment.")
+    
+    print(f"\n--- ANSWER ---\n{result['answer']}")
+    print(f"\n--- LATENCY: {result['latency_seconds']:.3f}s ---")
+    print(f"--- CONFIDENCE: {result['confidence']:.4f} ---")
+    print("\n--- SOURCES ---")
+    for src in result['sources']:
+        print(f"  • {src['file']} (score: {src['score']:.4f})")
+    
+    # Run benchmarks (if test queries provided)
+    test_queries_path = config.get("test_queries_path")
+    if test_queries_path and os.path.exists(test_queries_path):
+        import json
+        with open(test_queries_path, 'r') as f:
+            test_queries = json.load(f)
+        
+        logger.info("\n--- RUNNING BENCHMARKS ---")
+        benchmark_results = benchmark_retrieval_methods(kb, config, test_queries)
+    
+    logger.info("\n=== System Ready ===")
