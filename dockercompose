@@ -1,0 +1,106 @@
+version: "3.9"
+
+# =============================================================================
+# RAG Pipeline - Docker Compose
+# Services:
+#   rag-app     - Production application
+#   rag-test    - Runs full test suite
+#   rag-dev     - Development with live reload
+# =============================================================================
+
+x-common-env: &common-env
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  PYTHONPATH: /app
+  LOG_LEVEL: INFO
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Production application service
+  # ---------------------------------------------------------------------------
+  rag-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    image: rag-pipeline:latest
+    container_name: rag-app
+    environment:
+      <<: *common-env
+      APP_ENV: production
+    ports:
+      - "8080:8080"
+    volumes:
+      - rag_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - rag-network
+
+  # ---------------------------------------------------------------------------
+  # Test runner service
+  # ---------------------------------------------------------------------------
+  rag-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    image: rag-pipeline:test
+    container_name: rag-test
+    environment:
+      <<: *common-env
+      APP_ENV: test
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./pytest.ini:/app/pytest.ini:ro
+      - test_results:/app/test-results
+    command: >
+      pytest tests/
+      -v
+      --tb=short
+      --color=yes
+      --cov=rag_pipeline
+      --cov-report=term-missing
+      --cov-report=xml:/app/test-results/coverage.xml
+      --junitxml=/app/test-results/results.xml
+    networks:
+      - rag-network
+
+  # ---------------------------------------------------------------------------
+  # Development service (live code mount)
+  # ---------------------------------------------------------------------------
+  rag-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    image: rag-pipeline:dev
+    container_name: rag-dev
+    environment:
+      <<: *common-env
+      APP_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - .:/app
+    ports:
+      - "8081:8080"
+    command: >
+      sh -c "echo 'Dev environment ready. Source mounted at /app.' && tail -f /dev/null"
+    networks:
+      - rag-network
+
+volumes:
+  rag_data:
+    driver: local
+  test_results:
+    driver: local
+
+networks:
+  rag-network:
+    driver: bridge
