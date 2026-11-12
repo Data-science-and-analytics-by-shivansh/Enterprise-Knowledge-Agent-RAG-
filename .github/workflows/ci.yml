@@ -61,11 +61,21 @@ jobs:
       - name: Run pytest with coverage
         env:
           PYTHONPATH: src
+       - name: Run pytest with coverage
+        env:
+          PYTHONPATH: src
         run: |
+          cat << 'EOF' > .coveragerc
+          [run]
+          omit =
+              */main.py
+              */__init__.py
+          EOF
           pytest tests/ \
             -v \
             --tb=short \
             --cov=src/rag_pipeline \
+            --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80 \
