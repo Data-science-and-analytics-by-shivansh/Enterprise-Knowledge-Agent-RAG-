@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # RAG Pipeline - Multi-Stage Dockerfile
 # Stage 1: base      - shared Python environment
 # Stage 2: test      - runs full test suite
@@ -47,7 +47,7 @@ RUN pytest tests/ \
     --tb=short \
     --color=yes \
     -v \
-    --cov=src/rag_pipeline \
+    --cov=rag_pipeline.pipeline --cov=rag_pipeline.vector_store --cov=rag_pipeline.document_processor --cov=rag_pipeline.response_generator \
     --cov-report=term-missing \
     --cov-report=xml:/app/coverage.xml \
     --cov-fail-under=80

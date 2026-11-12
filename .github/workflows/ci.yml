@@ -59,10 +59,10 @@ jobs:
           pytest tests/ \
             -v \
             --tb=short \
-            --cov=src/rag_pipeline/pipeline \
-            --cov=src/rag_pipeline/vector_store \
-            --cov=src/rag_pipeline/document_processor \
-            --cov=src/rag_pipeline/response_generator \
+            --cov=rag_pipeline.pipeline \
+            --cov=rag_pipeline.vector_store \
+            --cov=rag_pipeline.document_processor \
+            --cov=rag_pipeline.response_generator \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80 \
