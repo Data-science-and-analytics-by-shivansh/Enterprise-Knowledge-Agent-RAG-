@@ -11,6 +11,7 @@ from rag_pipeline.document_processor import DocumentProcessor, Document
 # Document dataclass tests
 # ---------------------------------------------------------------------------
 
+
 class TestDocument:
     def test_document_creation_with_all_fields(self):
         doc = Document(
@@ -54,6 +55,7 @@ class TestDocument:
 # DocumentProcessor instantiation
 # ---------------------------------------------------------------------------
 
+
 class TestDocumentProcessorInit:
     def test_default_initialization(self):
         p = DocumentProcessor()
@@ -92,6 +94,7 @@ class TestDocumentProcessorInit:
 # clean_text tests
 # ---------------------------------------------------------------------------
 
+
 class TestCleanText:
     def test_strips_leading_and_trailing_whitespace(self, processor):
         assert processor.clean_text("  hello  ") == "hello"
@@ -129,6 +132,7 @@ class TestCleanText:
 # ---------------------------------------------------------------------------
 # chunk_text tests
 # ---------------------------------------------------------------------------
+
 
 class TestChunkText:
     def test_returns_list_of_strings(self, processor):
@@ -173,6 +177,7 @@ class TestChunkText:
 # ---------------------------------------------------------------------------
 # process_document tests
 # ---------------------------------------------------------------------------
+
 
 class TestProcessDocument:
     def test_returns_list_of_document_objects(self, processor, sample_texts):
@@ -221,6 +226,7 @@ class TestProcessDocument:
 # ---------------------------------------------------------------------------
 # process_batch tests
 # ---------------------------------------------------------------------------
+
 
 class TestProcessBatch:
     def test_returns_flat_list(self, processor, sample_texts):

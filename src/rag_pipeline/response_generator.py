@@ -164,15 +164,12 @@ class ResponseGenerator:
         for doc, score in retrieved:
             sentences = re.split(r"(?<=[.!?])\s+", doc.content)
             for sent in sentences:
-                if any(word in sent.lower() for word in question_lower.split()
-                       if len(word) > 3):
+                if any(word in sent.lower() for word in question_lower.split() if len(word) > 3):
                     return sent.strip()
 
         return f"Based on the retrieved context: {top_doc.content[:200]}..."
 
-    def _extract_sources(
-        self, retrieved: List[Tuple[Document, float]]
-    ) -> List[Dict[str, Any]]:
+    def _extract_sources(self, retrieved: List[Tuple[Document, float]]) -> List[Dict[str, Any]]:
         return [
             {
                 "doc_id": doc.doc_id,
@@ -183,9 +180,7 @@ class ResponseGenerator:
             for doc, score in retrieved
         ]
 
-    def _compute_confidence(
-        self, retrieved: List[Tuple[Document, float]]
-    ) -> float:
+    def _compute_confidence(self, retrieved: List[Tuple[Document, float]]) -> float:
         if not retrieved:
             return 0.0
         scores = [score for _, score in retrieved]

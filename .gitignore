@@ -1,4 +1,6 @@
+venv/
 .env
-storage/
 __pycache__/
-.ipynb_checkpoints/
+*.pyc
+chroma_db/
+.pytest_cache/

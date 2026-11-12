@@ -11,7 +11,7 @@ version: "3.9"
 x-common-env: &common-env
   PYTHONDONTWRITEBYTECODE: "1"
   PYTHONUNBUFFERED: "1"
-  PYTHONPATH: /app
+  PYTHONPATH: /app/src
   LOG_LEVEL: INFO
 
 services:
@@ -58,14 +58,13 @@ services:
       APP_ENV: test
     volumes:
       - ./tests:/app/tests:ro
-      - ./pytest.ini:/app/pytest.ini:ro
       - test_results:/app/test-results
     command: >
       pytest tests/
       -v
       --tb=short
       --color=yes
-      --cov=rag_pipeline
+      --cov=src/rag_pipeline
       --cov-report=term-missing
       --cov-report=xml:/app/test-results/coverage.xml
       --junitxml=/app/test-results/results.xml

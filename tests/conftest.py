@@ -3,7 +3,7 @@ Shared pytest fixtures for the RAG Pipeline test suite.
 """
 
 import pytest
-from rag_pipeline.document_processor import DocumentProcessor, Document
+from rag_pipeline.document_processor import DocumentProcessor
 from rag_pipeline.vector_store import VectorStore, TFIDFVectorizer
 from rag_pipeline.response_generator import ResponseGenerator, PromptBuilder
 from rag_pipeline.pipeline import RAGPipeline
@@ -106,9 +106,7 @@ def sample_documents(processor, sample_texts):
     docs = []
     for item in sample_texts:
         docs.extend(
-            processor.process_document(
-                item["text"], item["source"], item.get("metadata", {})
-            )
+            processor.process_document(item["text"], item["source"], item.get("metadata", {}))
         )
     return docs
 

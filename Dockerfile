@@ -16,7 +16,7 @@ LABEL description="Retrieval-Augmented Generation Pipeline"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app/src
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy source
-COPY rag_pipeline/ ./rag_pipeline/
+COPY src/rag_pipeline/ ./src/rag_pipeline/
 
 
 # ---------------------------------------------------------------------------
@@ -40,14 +40,14 @@ COPY rag_pipeline/ ./rag_pipeline/
 FROM base AS test
 
 COPY tests/ ./tests/
-COPY pytest.ini .
+COPY pytest.ini* ./
 
 # Run the full test suite; exit code propagates to docker build
 RUN pytest tests/ \
     --tb=short \
     --color=yes \
     -v \
-    --cov=rag_pipeline \
+    --cov=src/rag_pipeline \
     --cov-report=term-missing \
     --cov-report=xml:/app/coverage.xml \
     --cov-fail-under=80

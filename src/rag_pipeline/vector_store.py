@@ -7,7 +7,7 @@ Designed for testability without external vector DB dependencies.
 import math
 import re
 from collections import Counter
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Optional
 
 from .document_processor import Document
 
@@ -37,10 +37,7 @@ class TFIDFVectorizer:
             for tok in set(tokens):
                 df[tok] += 1
 
-        self.idf = {
-            tok: math.log((n + 1) / (df.get(tok, 0) + 1)) + 1.0
-            for tok in self.vocab
-        }
+        self.idf = {tok: math.log((n + 1) / (df.get(tok, 0) + 1)) + 1.0 for tok in self.vocab}
         self._fitted = True
         return self
 
@@ -132,9 +129,7 @@ class VectorStore:
         scores: List[Tuple[Document, float]] = []
 
         for doc_id, doc in self._documents.items():
-            sim = TFIDFVectorizer.cosine_similarity(
-                query_vec, self._vectors[doc_id]
-            )
+            sim = TFIDFVectorizer.cosine_similarity(query_vec, self._vectors[doc_id])
             if sim >= score_threshold:
                 scores.append((doc, sim))
 

@@ -7,7 +7,7 @@ into a single end-to-end pipeline.
 import logging
 from typing import List, Dict, Any, Optional
 
-from .document_processor import DocumentProcessor, Document
+from .document_processor import DocumentProcessor
 from .vector_store import VectorStore
 from .response_generator import ResponseGenerator, PromptBuilder
 

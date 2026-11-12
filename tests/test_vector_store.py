@@ -3,7 +3,6 @@ Unit tests for VectorStore and TFIDFVectorizer.
 ~55 tests covering indexing, search, CRUD, edge cases.
 """
 
-import math
 import pytest
 from rag_pipeline.document_processor import Document
 from rag_pipeline.vector_store import VectorStore, TFIDFVectorizer
@@ -12,6 +11,7 @@ from rag_pipeline.vector_store import VectorStore, TFIDFVectorizer
 # ---------------------------------------------------------------------------
 # TFIDFVectorizer tests
 # ---------------------------------------------------------------------------
+
 
 class TestTFIDFVectorizerInit:
     def test_initial_state_is_not_fitted(self, vectorizer):
@@ -93,6 +93,7 @@ class TestCosineSimilarity:
 # VectorStore build_index tests
 # ---------------------------------------------------------------------------
 
+
 class TestVectorStoreBuildIndex:
     def test_builds_index_successfully(self, sample_documents):
         vs = VectorStore()
@@ -116,6 +117,7 @@ class TestVectorStoreBuildIndex:
 # ---------------------------------------------------------------------------
 # VectorStore add_document tests
 # ---------------------------------------------------------------------------
+
 
 class TestVectorStoreAddDocument:
     def test_add_document_increases_size(self, vector_store):
@@ -149,6 +151,7 @@ class TestVectorStoreAddDocument:
 # ---------------------------------------------------------------------------
 # VectorStore search tests
 # ---------------------------------------------------------------------------
+
 
 class TestVectorStoreSearch:
     def test_search_returns_list_of_tuples(self, vector_store):
@@ -203,6 +206,7 @@ class TestVectorStoreSearch:
 # ---------------------------------------------------------------------------
 # VectorStore CRUD tests
 # ---------------------------------------------------------------------------
+
 
 class TestVectorStoreCRUD:
     def test_get_document_returns_correct_document(self, vector_store, sample_documents):

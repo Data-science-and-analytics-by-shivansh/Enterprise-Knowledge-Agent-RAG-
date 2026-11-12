@@ -13,6 +13,7 @@ from rag_pipeline.pipeline import RAGPipeline
 # PromptBuilder tests
 # ---------------------------------------------------------------------------
 
+
 class TestPromptBuilderInit:
     def test_default_max_context_length(self):
         pb = PromptBuilder()
@@ -62,8 +63,7 @@ class TestPromptBuilderBuildContext:
 
     def test_multiple_docs_separated_in_context(self, prompt_builder):
         retrieved = self._make_retrieved(
-            ["First document content", "Second document content"],
-            ["src1", "src2"]
+            ["First document content", "Second document content"], ["src1", "src2"]
         )
         context = prompt_builder.build_context(retrieved)
         assert "First document" in context
@@ -73,8 +73,7 @@ class TestPromptBuilderBuildContext:
 class TestPromptBuilderBuildQAPrompt:
     def _make_retrieved(self, texts):
         return [
-            (Document(doc_id=f"d{i}", content=t, source=f"s{i}"), 0.9)
-            for i, t in enumerate(texts)
+            (Document(doc_id=f"d{i}", content=t, source=f"s{i}"), 0.9) for i, t in enumerate(texts)
         ]
 
     def test_qa_prompt_contains_question(self, prompt_builder):
@@ -111,6 +110,7 @@ class TestPromptBuilderBuildQAPrompt:
 # ---------------------------------------------------------------------------
 # ResponseGenerator tests
 # ---------------------------------------------------------------------------
+
 
 class TestResponseGeneratorInit:
     def test_default_initialization(self):
@@ -195,6 +195,7 @@ class TestResponseGeneratorGenerate:
 # ---------------------------------------------------------------------------
 # RAGPipeline tests
 # ---------------------------------------------------------------------------
+
 
 class TestRAGPipelineInit:
     def test_default_initialization(self, pipeline):

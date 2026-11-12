@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 @dataclass
 class Document:
     """Represents a processed document chunk."""
+
     doc_id: str
     content: str
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -20,9 +21,7 @@ class Document:
 
     def __post_init__(self):
         if not self.doc_id:
-            self.doc_id = hashlib.md5(
-                f"{self.content}{self.chunk_index}".encode()
-            ).hexdigest()[:12]
+            self.doc_id = hashlib.md5(f"{self.content}{self.chunk_index}".encode()).hexdigest()[:12]
 
 
 class DocumentProcessor:
@@ -77,7 +76,7 @@ class DocumentProcessor:
 
         i = 0
         while i < len(words):
-            chunk_words = words[i: i + self.chunk_size]
+            chunk_words = words[i : i + self.chunk_size]
             chunk = " ".join(chunk_words)
             if len(chunk) >= self.min_chunk_length:
                 chunks.append(chunk)
@@ -109,9 +108,7 @@ class DocumentProcessor:
         documents = []
 
         for idx, chunk in enumerate(chunks):
-            doc_id = hashlib.md5(
-                f"{source}_{idx}_{chunk[:32]}".encode()
-            ).hexdigest()[:12]
+            doc_id = hashlib.md5(f"{source}_{idx}_{chunk[:32]}".encode()).hexdigest()[:12]
             doc = Document(
                 doc_id=doc_id,
                 content=chunk,
