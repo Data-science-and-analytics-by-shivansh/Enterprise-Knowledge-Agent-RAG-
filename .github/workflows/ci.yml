@@ -58,9 +58,6 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Run pytest with coverage
-        env:
-          PYTHONPATH: src
        - name: Run pytest with coverage
         env:
           PYTHONPATH: src
