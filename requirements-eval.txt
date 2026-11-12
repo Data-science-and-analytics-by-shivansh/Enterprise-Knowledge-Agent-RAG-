@@ -1,0 +1,8 @@
+# Evaluation dependencies for RAGAS benchmark suite
+# Install with: pip install -r requirements-eval.txt
+# Keep isolated from production requirements.txt
+
+ragas==0.1.21
+datasets>=2.16.0,<3.0.0
+langchain-openai>=0.1.0,<0.2.0
+pandas>=2.0.0
