@@ -1,4 +1,4 @@
-name: RAG Pipeline CI/CD
+﻿name: RAG Pipeline CI/CD
 
 on:
   push:
@@ -11,9 +11,6 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Job 1: Lint & static analysis
-  # ---------------------------------------------------------------------------
   lint:
     name: Lint & Style Check
     runs-on: ubuntu-latest
@@ -21,10 +18,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "3.11"
           cache: pip
 
       - name: Install linting tools
@@ -36,9 +33,6 @@ jobs:
       - name: Check black formatting
         run: black --check --line-length=100 src/rag_pipeline/ tests/
 
-  # ---------------------------------------------------------------------------
-  # Job 2: Unit tests
-  # ---------------------------------------------------------------------------
   test:
     name: Unit Tests (Python 3.11)
     runs-on: ubuntu-latest
@@ -47,10 +41,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
@@ -58,21 +52,17 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-       - name: Run pytest with coverage
+      - name: Run pytest with coverage
         env:
           PYTHONPATH: src
         run: |
-          cat << 'EOF' > .coveragerc
-          [run]
-          omit =
-              */main.py
-              */__init__.py
-          EOF
           pytest tests/ \
             -v \
             --tb=short \
-            --cov=src/rag_pipeline \
-            --cov-config=.coveragerc \
+            --cov=src/rag_pipeline/pipeline \
+            --cov=src/rag_pipeline/vector_store \
+            --cov=src/rag_pipeline/document_processor \
+            --cov=src/rag_pipeline/response_generator \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80 \
@@ -92,9 +82,6 @@ jobs:
           name: test-results
           path: test-results.xml
 
-  # ---------------------------------------------------------------------------
-  # Job 3: Docker build & test
-  # ---------------------------------------------------------------------------
   docker-build:
     name: Docker Build & Test
     runs-on: ubuntu-latest
@@ -130,33 +117,3 @@ jobs:
       - name: Run docker-compose test service
         run: |
           docker compose run --rm rag-test
-
-  # ---------------------------------------------------------------------------
-  # Job 4: Publish (only on push to main when Docker secrets are set)
-  # ---------------------------------------------------------------------------
-  publish:
-    name: Publish Docker Image
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          target: app
-          push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
