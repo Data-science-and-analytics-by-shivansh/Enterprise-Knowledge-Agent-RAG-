@@ -8,7 +8,6 @@ from rag_pipeline.vector_store import VectorStore, TFIDFVectorizer
 from rag_pipeline.response_generator import ResponseGenerator, PromptBuilder
 from rag_pipeline.pipeline import RAGPipeline
 
-
 # ---------------------------------------------------------------------------
 # Sample data
 # ---------------------------------------------------------------------------

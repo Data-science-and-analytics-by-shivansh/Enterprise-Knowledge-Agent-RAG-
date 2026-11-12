@@ -9,7 +9,6 @@ from typing import List, Tuple, Dict, Any, Optional
 
 from .document_processor import Document
 
-
 # ---------------------------------------------------------------------------
 # Prompt Templates
 # ---------------------------------------------------------------------------

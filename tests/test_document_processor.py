@@ -6,7 +6,6 @@ Unit tests for DocumentProcessor and Document dataclass.
 import pytest
 from rag_pipeline.document_processor import DocumentProcessor, Document
 
-
 # ---------------------------------------------------------------------------
 # Document dataclass tests
 # ---------------------------------------------------------------------------

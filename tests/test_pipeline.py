@@ -8,7 +8,6 @@ from rag_pipeline.document_processor import Document
 from rag_pipeline.response_generator import ResponseGenerator, PromptBuilder
 from rag_pipeline.pipeline import RAGPipeline
 
-
 # ---------------------------------------------------------------------------
 # PromptBuilder tests
 # ---------------------------------------------------------------------------

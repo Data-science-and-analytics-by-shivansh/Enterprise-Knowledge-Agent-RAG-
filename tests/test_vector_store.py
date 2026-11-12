@@ -7,7 +7,6 @@ import pytest
 from rag_pipeline.document_processor import Document
 from rag_pipeline.vector_store import VectorStore, TFIDFVectorizer
 
-
 # ---------------------------------------------------------------------------
 # TFIDFVectorizer tests
 # ---------------------------------------------------------------------------
