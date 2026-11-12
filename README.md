@@ -89,14 +89,37 @@ pip install -r requirements.txt
 cp .env.example .env
 PYTHONPATH=src python src/rag_pipeline/main.py
 Running Tests
-Execute the 131-test unit and integration suite with pytest:
+Execute the unit and integration test suite with pytest:
 
-Bash
+```bash
 # Linux / macOS
-PYTHONPATH=src pytest -v
+PYTHONPATH=src:scripts pytest -v
 
 # Windows PowerShell
-$env:PYTHONPATH="src"; python -m pytest -v
+$env:PYTHONPATH="src;scripts"; python -m pytest -v
+```
+
+### RAGAS Evaluation Benchmark Suite
+Evaluate retrieval and response quality across **Faithfulness**, **Answer Relevancy**, and **Context Precision**. The script self-discovers `src/` and runs directly from the repository root without requiring `PYTHONPATH`.
+
+```bash
+# 1. Dry-run mode (local dataset validation, pipeline execution & latency benchmarks; no API key needed):
+python scripts/evaluate_rag.py --dry-run
+
+# 2. Export metrics to JSON and CSV:
+python scripts/evaluate_rag.py --dry-run --output-json results/eval.json --output-csv results/eval.csv
+
+# 3. Live evaluation with RAGAS evaluator LLM:
+pip install -r requirements-eval.txt
+
+# Linux / macOS:
+export OPENAI_API_KEY="your-api-key"
+python scripts/evaluate_rag.py --dataset data/eval_benchmark.jsonl --corpus data/eval_corpus.jsonl
+
+# Windows PowerShell:
+$env:OPENAI_API_KEY="your-api-key"
+python scripts/evaluate_rag.py --dataset data/eval_benchmark.jsonl --corpus data/eval_corpus.jsonl
+```
 
 ----
 
@@ -107,7 +130,7 @@ Contributions are welcome! Check the Issues tab for good first issue tasks:
 
 [ ] Support DOCX, Markdown, and Confluence ingestion connectors
 
-[ ] Add RAGAS evaluation benchmark script (faithfulness & answer_relevancy)
+[x] Add RAGAS evaluation benchmark script (faithfulness, answer_relevancy & context_precision)
 
 [ ] Add streaming response support via FastAPI SSE
 
